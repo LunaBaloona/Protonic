@@ -1,18 +1,18 @@
 slint::include_modules!();
-use std::process::Command;
+use device_query::{DeviceQuery, DeviceState, Keycode};
+use rfd::FileDialog;
+use rodio::{Decoder, OutputStream, Sink};
+use serde::{Deserialize, Serialize};
+use slint::{ModelRc, SharedString, VecModel};
 use std::collections::{BTreeMap, HashMap};
+use std::fs;
+use std::io::{BufReader, Cursor};
+use std::path::PathBuf;
+use std::process::Command;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::fs;
-use std::path::PathBuf;
-use std::io::{BufReader, Cursor};
-use slint::{VecModel, SharedString, ModelRc};
 use steamlocate::SteamDir;
-use device_query::{DeviceQuery, DeviceState, Keycode};
-use serde::{Serialize, Deserialize};
-use rfd::FileDialog;
-use rodio::{Decoder, OutputStream, Sink};
 
 // Embed our ogg audio files at compile time
 const AUDIO_LAUNCH_GAME: &[u8] = include_bytes!("../audio/LaunchGame.ogg");
@@ -63,7 +63,7 @@ fn play_audio(audio_data: &'static [u8]) {
 fn find_steam_userdata_path() -> Option<PathBuf> {
     let steam_dir = SteamDir::locate().ok()?;
     let userdata_path = steam_dir.path().join("userdata");
-    
+
     if userdata_path.exists() {
         // Find the first user directory (we're going to assume most users have only one)
         if let Ok(entries) = fs::read_dir(&userdata_path) {
@@ -109,7 +109,8 @@ fn has_protonhax_configured(app_id: &str) -> bool {
                     if let Some(first_quote) = after_launch[15..].find('"') {
                         let value_start = 15 + first_quote + 1;
                         if let Some(end_quote) = after_launch[value_start..].find('"') {
-                            let launch_options = &after_launch[value_start..value_start + end_quote];
+                            let launch_options =
+                                &after_launch[value_start..value_start + end_quote];
                             return launch_options.contains("protonhax");
                         }
                     }
@@ -122,54 +123,59 @@ fn has_protonhax_configured(app_id: &str) -> bool {
 
 /// Configure protonhax in Steam launch options for a game
 fn configure_launch_options(app_id: &str) -> Result<String, String> {
-    let localconfig_path = get_localconfig_path()
-        .ok_or_else(|| "Could not find Steam localconfig.vdf".to_string())?;
-    
+    let localconfig_path =
+        get_localconfig_path().ok_or_else(|| "Could not find Steam localconfig.vdf".to_string())?;
+
     let content = fs::read_to_string(&localconfig_path)
         .map_err(|e| format!("Failed to read localconfig.vdf: {}", e))?;
-    
+
     // Check if already configured
     if has_protonhax_configured(app_id) {
         return Ok("Launch options already configured".to_string());
     }
-    
+
     // Find the app section
     let app_pattern = format!("\"{}\"", app_id);
-    let app_pos = content.find(&app_pattern)
-        .ok_or_else(|| "Game not found in Steam config. Launch the game from Steam at least once first.".to_string())?;
-    
+    let app_pos = content.find(&app_pattern).ok_or_else(|| {
+        "Game not found in Steam config. Launch the game from Steam at least once first."
+            .to_string()
+    })?;
+
     // Find the opening brace for this app's section
     let after_app = &content[app_pos + app_pattern.len()..];
-    let brace_offset = after_app.find('{')
+    let brace_offset = after_app
+        .find('{')
         .ok_or_else(|| "Invalid VDF structure".to_string())?;
     let section_start = app_pos + app_pattern.len() + brace_offset + 1;
-    
+
     // Check if LaunchOptions already exists
     let search_end = std::cmp::min(section_start + 500, content.len());
     let search_area = &content[section_start..search_end];
-    
+
     let new_content = if let Some(launch_pos) = search_area.find("\"LaunchOptions\"") {
         // LaunchOptions exists - we need to prepend protonhax to the existing value
         let abs_launch_pos = section_start + launch_pos;
         let after_key = &content[abs_launch_pos + 15..]; // 15 = len of "LaunchOptions"
-        
+
         // Find the value
-        let first_quote = after_key.find('"')
+        let first_quote = after_key
+            .find('"')
             .ok_or_else(|| "Invalid LaunchOptions format".to_string())?;
         let value_start = abs_launch_pos + 15 + first_quote + 1;
         let value_area = &content[value_start..];
-        let end_quote = value_area.find('"')
+        let end_quote = value_area
+            .find('"')
             .ok_or_else(|| "Invalid LaunchOptions format".to_string())?;
-        
+
         let existing_options = &content[value_start..value_start + end_quote];
-        
+
         // Build new launch options
         let new_options = if existing_options.is_empty() {
             "protonhax init %COMMAND%".to_string()
         } else {
             format!("protonhax init {} %COMMAND%", existing_options)
         };
-        
+
         // Replace the old value with the new one
         format!(
             "{}{}{}",
@@ -181,11 +187,14 @@ fn configure_launch_options(app_id: &str) -> Result<String, String> {
         // LaunchOptions doesn't exist - add it
         // Find a good place to insert (after the opening brace)
         let insert_pos = section_start;
-        
+
         // Detect indentation by looking at the surrounding content
         let indent = "\t\t\t\t\t\t\t";
-        let new_line = format!("\n{}\"LaunchOptions\"\t\t\"protonhax init %COMMAND%\"", indent);
-        
+        let new_line = format!(
+            "\n{}\"LaunchOptions\"\t\t\"protonhax init %COMMAND%\"",
+            indent
+        );
+
         format!(
             "{}{}{}",
             &content[..insert_pos],
@@ -193,11 +202,11 @@ fn configure_launch_options(app_id: &str) -> Result<String, String> {
             &content[insert_pos..]
         )
     };
-    
+
     // Write the modified content back
     fs::write(&localconfig_path, new_content)
         .map_err(|e| format!("Failed to write localconfig.vdf: {}", e))?;
-    
+
     Ok("Launch options configured successfully".to_string())
 }
 
@@ -206,7 +215,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load config from ~/.config/protonic/default-config.toml
     let cfg: AppConfig = confy::load("protonic", None).unwrap_or_default();
-    
+
     // Use Arc<Mutex> for thread-safe config sharing
     let config = Arc::new(Mutex::new(cfg));
 
@@ -216,14 +225,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.set_search_text(cfg.last_game_name.clone().into());
         ui.set_app_id(cfg.last_app_id.clone().into());
         ui.set_auto_configure(cfg.auto_configure);
-        
+
         // Load exe paths for last selected game if any
         if !cfg.last_app_id.is_empty() {
             if let Some(game_cfg) = cfg.game_configs.get(&cfg.last_app_id) {
                 ui.set_exe1_path(game_cfg.exe1_path.clone().into());
                 ui.set_exe2_path(game_cfg.exe2_path.clone().into());
             }
-            
+
             // Check launch options status
             if cfg.auto_configure {
                 let status = if has_protonhax_configured(&cfg.last_app_id) {
@@ -288,14 +297,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(ui) = ui_handle_select.upgrade() {
             if let Some(id) = games_clone.get(name.as_str()) {
                 ui.set_app_id(SharedString::from(id));
-                
+
                 let mut cfg = config_select.lock().unwrap();
-                
+
                 // Load exe paths for selected game
                 let game_cfg = cfg.game_configs.get(id).cloned().unwrap_or_default();
                 ui.set_exe1_path(game_cfg.exe1_path.into());
                 ui.set_exe2_path(game_cfg.exe2_path.into());
-                
+
                 // Update launch options status
                 if cfg.auto_configure {
                     let status = if has_protonhax_configured(id) {
@@ -305,7 +314,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     };
                     ui.set_launch_options_status(status.into());
                 }
-                
+
                 // Save last selected game
                 cfg.last_game_name = name.to_string();
                 cfg.last_app_id = id.clone();
@@ -322,7 +331,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut cfg = config_toggle.lock().unwrap();
             cfg.auto_configure = enabled;
             let _ = confy::store("protonic", None, &*cfg);
-            
+
             // Update status display
             if enabled && !cfg.last_app_id.is_empty() {
                 let status = if has_protonhax_configured(&cfg.last_app_id) {
@@ -346,7 +355,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if app_id.is_empty() {
                 return;
             }
-            
+
             if let Some(path) = FileDialog::new()
                 .add_filter("Executables", &["exe"])
                 .add_filter("All Files", &["*"])
@@ -354,7 +363,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             {
                 let path_str = path.to_string_lossy().to_string();
                 ui.set_exe1_path(path_str.clone().into());
-                
+
                 // Save to config
                 let mut cfg = config_browse1.lock().unwrap();
                 let game_cfg = cfg.game_configs.entry(app_id).or_default();
@@ -373,7 +382,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if app_id.is_empty() {
                 return;
             }
-            
+
             if let Some(path) = FileDialog::new()
                 .add_filter("Executables", &["exe"])
                 .add_filter("All Files", &["*"])
@@ -381,7 +390,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             {
                 let path_str = path.to_string_lossy().to_string();
                 ui.set_exe2_path(path_str.clone().into());
-                
+
                 // Save to config
                 let mut cfg = config_browse2.lock().unwrap();
                 let game_cfg = cfg.game_configs.entry(app_id).or_default();
@@ -398,7 +407,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(ui) = ui_handle_clear1.upgrade() {
             let app_id = ui.get_app_id().to_string();
             ui.set_exe1_path(SharedString::new());
-            
+
             if !app_id.is_empty() {
                 let mut cfg = config_clear1.lock().unwrap();
                 if let Some(game_cfg) = cfg.game_configs.get_mut(&app_id) {
@@ -416,7 +425,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(ui) = ui_handle_clear2.upgrade() {
             let app_id = ui.get_app_id().to_string();
             ui.set_exe2_path(SharedString::new());
-            
+
             if !app_id.is_empty() {
                 let mut cfg = config_clear2.lock().unwrap();
                 if let Some(game_cfg) = cfg.game_configs.get_mut(&app_id) {
@@ -431,7 +440,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_launch = Arc::clone(&config);
     ui.on_run_protonhax(move |app_id| {
         let app_id_str = app_id.to_string();
-        
+
         // Get config values
         let (exe1, exe2, auto_configure) = {
             let cfg = config_launch.lock().unwrap();
@@ -472,7 +481,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if keys.contains(&Keycode::F1) {
                     // Play program launch audio
                     play_audio(AUDIO_LAUNCH_PROGRAM);
-                    
+
                     // Launch exe 1
                     println!("Launching: {}", exe1);
                     let _ = Command::new("protonhax")
