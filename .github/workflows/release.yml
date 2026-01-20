@@ -22,7 +22,7 @@ jobs:
         sudo apt-get install -y libasound2-dev libssl-dev pkg-config
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-action@stable
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Build release binary
       run: cargo build --release
@@ -114,7 +114,7 @@ jobs:
         Depends: libc6, libgcc-s1, python3
         Recommends: steam
         Maintainer: Protonic Team
-        Description: Launch Windows executables inside Steam Proton environments
+        Description: Launch Windows executables in Steam Proton environments
          Protonic is a GUI application that allows users to easily launch
          Windows executables inside Steam games' Proton environments using
          protonhax. Features include per-game executable configuration,
