@@ -1,0 +1,19 @@
+[package]
+name = "protonic"
+version = "0.1.2"
+edition = "2024"
+
+[dependencies]
+slint = "1.14.1"
+steamlocate = "2.0.1"
+device_query = "4.0.1"
+confy = "2.0.0"
+serde = { version = "1.0.228", features = ["derive"] }
+rfd = "0.17.2"
+
+[build-dependencies]
+slint-build = "1.14.1"
+
+[profile.release]
+strip = true
+opt-level = 3

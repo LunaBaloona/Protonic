@@ -1,0 +1,156 @@
+import { Button, LineEdit, VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
+
+export component AppWindow inherits Window {
+    title: "Protonic v0.1.2";
+    icon: @image-url("icon.png");
+    min-width: 500px;
+    min-height: 620px;
+
+    in property <[string]> game_names: [];
+    in-out property <string> app_id <=> input_id.text;
+    in-out property <string> search_text;
+    in-out property <string> exe1_path: "";
+    in-out property <string> exe2_path: "";
+
+    callback run_protonhax(string);
+    callback game_selected(string);
+    callback search_edited(string);
+    callback browse_exe1();
+    callback browse_exe2();
+    callback clear_exe1();
+    callback clear_exe2();
+
+    VerticalBox {
+        padding: 20px;
+        spacing: 10px;
+
+        Text { text: "Search & Select Game:"; font-size: 14px; }
+
+        LineEdit {
+            placeholder-text: "Type to search...";
+            text <=> root.search_text;
+            edited(text) => {
+                root.search_edited(text);
+            }
+        }
+
+        Rectangle {
+            background: #2a2a2a;
+            border-radius: 4px;
+            height: 160px;
+            ScrollView {
+                VerticalBox {
+                    padding: 5px;
+                    alignment: start;
+                    for name in root.game_names : Button {
+                        text: name;
+                        clicked => {
+                            root.game_selected(name);
+                            root.search_text = name;
+                        }
+                    }
+                }
+            }
+        }
+
+        Text { text: "App ID:"; font-size: 14px; }
+        input_id := LineEdit {
+            placeholder-text: "App ID";
+            font-size: 16px;
+        }
+
+        // Executable 1 Section
+        Text { text: "Executable 1:"; font-size: 14px; }
+        HorizontalBox {
+            spacing: 8px;
+            Rectangle {
+                background: #2a2a2a;
+                border-radius: 4px;
+                horizontal-stretch: 1;
+                HorizontalBox {
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    Text {
+                        text: root.exe1_path == "" ? "No file selected" : root.exe1_path;
+                        color: root.exe1_path == "" ? #888888 : #ffffff;
+                        font-size: 12px;
+                        overflow: elide;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+            Button {
+                text: "Browse";
+                clicked => { root.browse_exe1(); }
+            }
+            Button {
+                text: "Clear";
+                enabled: root.exe1_path != "";
+                clicked => { root.clear_exe1(); }
+            }
+        }
+
+        // Executable 2 Section
+        Text { text: "Executable 2 (Optional):"; font-size: 14px; }
+        HorizontalBox {
+            spacing: 8px;
+            Rectangle {
+                background: #2a2a2a;
+                border-radius: 4px;
+                horizontal-stretch: 1;
+                HorizontalBox {
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    Text {
+                        text: root.exe2_path == "" ? "No file selected" : root.exe2_path;
+                        color: root.exe2_path == "" ? #888888 : #ffffff;
+                        font-size: 12px;
+                        overflow: elide;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+            Button {
+                text: "Browse";
+                clicked => { root.browse_exe2(); }
+            }
+            Button {
+                text: "Clear";
+                enabled: root.exe2_path != "";
+                clicked => { root.clear_exe2(); }
+            }
+        }
+
+        // Instructions
+        VerticalBox {
+            padding: 0;
+            spacing: 5px;
+            Text {
+                text: "Add this line to the game's Launch Options in Steam first:";
+                font-size: 11px;
+                wrap: word-wrap;
+            }
+            LineEdit {
+                text: "protonhax init %COMMAND%";
+                read-only: true;
+            }
+        }
+
+        Text {
+            text: "Press Launch, then press F1 at the game's menu to run your executable(s)";
+            font-size: 11px;
+            color: #3498db;
+            wrap: word-wrap;
+            horizontal-alignment: center;
+        }
+
+        Button {
+            text: "Launch";
+            primary: true;
+            enabled: root.app_id != "" && root.exe1_path != "";
+            clicked => {
+                root.run_protonhax(root.app_id);
+            }
+        }
+    }
+}
