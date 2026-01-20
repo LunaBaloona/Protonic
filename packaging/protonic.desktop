@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Protonic
+Comment=Launch Windows executables inside Steam Proton environments
+Exec=protonic
+Icon=protonic
+Terminal=false
+Type=Application
+Categories=Game;Utility;
+Keywords=steam;proton;wine;gaming;

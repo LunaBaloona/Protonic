@@ -1,0 +1,33 @@
+# Maintainer: LunaBaloona
+pkgname=protonic-bin
+pkgver=0.2.1
+pkgrel=1
+pkgdesc="GUI application for launching Windows executables inside Steam Proton environments (pre-built binary)"
+arch=('x86_64')
+url="https://github.com/LunaBaloona/protonic"
+license=('GPL2')
+depends=('gcc-libs' 'steam')
+optdepends=('python: required for protonhax')
+provides=('protonic')
+conflicts=('protonic')
+source=(
+    "protonic-${pkgver}.tar.gz::https://github.com/LunaBaloona/protonic/releases/download/v${pkgver}/protonic-${pkgver}-x86_64-linux.tar.gz"
+    "protonhax::git+https://github.com/jcnils/protonhax.git"
+)
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+    cd "$srcdir"
+    
+    # Install protonic binary
+    install -Dm755 "protonic" "$pkgdir/usr/bin/protonic"
+    
+    # Install protonhax
+    install -Dm755 "protonhax/protonhax" "$pkgdir/usr/bin/protonhax"
+    
+    # Install desktop file
+    install -Dm644 "protonic.desktop" "$pkgdir/usr/share/applications/protonic.desktop"
+    
+    # Install icon
+    install -Dm644 "icon.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/protonic.png"
+}
