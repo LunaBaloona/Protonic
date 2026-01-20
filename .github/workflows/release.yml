@@ -1,0 +1,138 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libasound2-dev libssl-dev pkg-config
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-action@stable
+
+    - name: Build release binary
+      run: cargo build --release
+
+    - name: Download protonhax
+      run: |
+        curl -L -o protonhax "https://raw.githubusercontent.com/jcnils/protonhax/master/protonhax"
+        chmod +x protonhax
+
+    - name: Get version from tag
+      id: version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+    - name: Create release tarball
+      run: |
+        VERSION=${{ steps.version.outputs.VERSION }}
+        RELEASE_NAME="protonic-${VERSION}-x86_64-linux"
+        mkdir -p "${RELEASE_NAME}"
+        
+        cp target/release/protonic "${RELEASE_NAME}/"
+        cp protonhax "${RELEASE_NAME}/"
+        cp packaging/protonic.desktop "${RELEASE_NAME}/"
+        cp ui/icon.png "${RELEASE_NAME}/"
+        cp README.md "${RELEASE_NAME}/"
+        cp LICENSE "${RELEASE_NAME}/"
+        
+        # Create install script
+        cat > "${RELEASE_NAME}/install.sh" << 'EOF'
+        #!/bin/bash
+        set -e
+        echo "Installing Protonic..."
+        if [ "$EUID" -ne 0 ]; then
+            echo "Please run as root (sudo ./install.sh)"
+            exit 1
+        fi
+        install -Dm755 protonic /usr/bin/protonic
+        install -Dm755 protonhax /usr/bin/protonhax
+        install -Dm644 protonic.desktop /usr/share/applications/protonic.desktop
+        install -Dm644 icon.png /usr/share/icons/hicolor/256x256/apps/protonic.png
+        gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
+        echo "Protonic installed successfully!"
+        EOF
+        chmod +x "${RELEASE_NAME}/install.sh"
+        
+        # Create uninstall script
+        cat > "${RELEASE_NAME}/uninstall.sh" << 'EOF'
+        #!/bin/bash
+        set -e
+        echo "Uninstalling Protonic..."
+        if [ "$EUID" -ne 0 ]; then
+            echo "Please run as root (sudo ./uninstall.sh)"
+            exit 1
+        fi
+        rm -f /usr/bin/protonic /usr/bin/protonhax
+        rm -f /usr/share/applications/protonic.desktop
+        rm -f /usr/share/icons/hicolor/256x256/apps/protonic.png
+        gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
+        echo "Protonic uninstalled successfully!"
+        EOF
+        chmod +x "${RELEASE_NAME}/uninstall.sh"
+        
+        tar -czvf "${RELEASE_NAME}.tar.gz" "${RELEASE_NAME}"
+
+    - name: Create .deb package
+      run: |
+        VERSION=${{ steps.version.outputs.VERSION }}
+        PKG_NAME="protonic_${VERSION}_amd64"
+        mkdir -p "${PKG_NAME}/DEBIAN"
+        mkdir -p "${PKG_NAME}/usr/bin"
+        mkdir -p "${PKG_NAME}/usr/share/applications"
+        mkdir -p "${PKG_NAME}/usr/share/icons/hicolor/256x256/apps"
+        mkdir -p "${PKG_NAME}/usr/share/licenses/protonic"
+        
+        cp target/release/protonic "${PKG_NAME}/usr/bin/"
+        cp protonhax "${PKG_NAME}/usr/bin/"
+        chmod 755 "${PKG_NAME}/usr/bin/protonic"
+        chmod 755 "${PKG_NAME}/usr/bin/protonhax"
+        
+        cp packaging/protonic.desktop "${PKG_NAME}/usr/share/applications/"
+        cp ui/icon.png "${PKG_NAME}/usr/share/icons/hicolor/256x256/apps/protonic.png"
+        cp LICENSE "${PKG_NAME}/usr/share/licenses/protonic/"
+        
+        cat > "${PKG_NAME}/DEBIAN/control" << EOF
+        Package: protonic
+        Version: ${VERSION}
+        Section: games
+        Priority: optional
+        Architecture: amd64
+        Depends: libc6, libgcc-s1, python3
+        Recommends: steam
+        Maintainer: Protonic Team
+        Description: Launch Windows executables inside Steam Proton environments
+         Protonic is a GUI application that allows users to easily launch
+         Windows executables inside Steam games' Proton environments using
+         protonhax. Features include per-game executable configuration,
+         automatic launch option setup, and audio feedback.
+        Homepage: https://github.com/${{ github.repository }}
+        EOF
+        
+        dpkg-deb --build "${PKG_NAME}"
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Protonic v${{ steps.version.outputs.VERSION }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        files: |
+          protonic-${{ steps.version.outputs.VERSION }}-x86_64-linux.tar.gz
+          protonic_${{ steps.version.outputs.VERSION }}_amd64.deb
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,7 +1,10 @@
 [package]
 name = "protonic"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
+license = "GPL-2.0"
+description = "An app that lets you run another .exe inside your games proton instance"
+repository = "https://github.com/LunaBaloona/Protonic"
 
 [dependencies]
 slint = "1.14.1"
