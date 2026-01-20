@@ -1,16 +1,18 @@
-import { Button, LineEdit, VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
+import { Button, LineEdit, VerticalBox, HorizontalBox, ScrollView, CheckBox } from "std-widgets.slint";
 
 export component AppWindow inherits Window {
-    title: "Protonic v0.1.2";
+    title: "Protonic v0.2.0";
     icon: @image-url("icon.png");
     min-width: 500px;
     min-height: 620px;
 
     in property <[string]> game_names: [];
-    in-out property <string> app_id <=> input_id.text;
+    in-out property <string> app_id: "";
     in-out property <string> search_text;
     in-out property <string> exe1_path: "";
     in-out property <string> exe2_path: "";
+    in-out property <bool> auto_configure: true;
+    in-out property <string> launch_options_status: "";
 
     callback run_protonhax(string);
     callback game_selected(string);
@@ -19,6 +21,7 @@ export component AppWindow inherits Window {
     callback browse_exe2();
     callback clear_exe1();
     callback clear_exe2();
+    callback auto_configure_toggled(bool);
 
     VerticalBox {
         padding: 20px;
@@ -53,14 +56,8 @@ export component AppWindow inherits Window {
             }
         }
 
-        Text { text: "App ID:"; font-size: 14px; }
-        input_id := LineEdit {
-            placeholder-text: "App ID";
-            font-size: 16px;
-        }
-
         // Executable 1 Section
-        Text { text: "Executable 1:"; font-size: 14px; }
+        Text { text: "Program or .exe file 1:"; font-size: 14px; }
         HorizontalBox {
             spacing: 8px;
             Rectangle {
@@ -91,7 +88,7 @@ export component AppWindow inherits Window {
         }
 
         // Executable 2 Section
-        Text { text: "Executable 2 (Optional):"; font-size: 14px; }
+        Text { text: "Program or .exe file (Optional):"; font-size: 14px; }
         HorizontalBox {
             spacing: 8px;
             Rectangle {
@@ -121,18 +118,44 @@ export component AppWindow inherits Window {
             }
         }
 
-        // Instructions
+        // Launch Options Section
         VerticalBox {
             padding: 0;
-            spacing: 5px;
-            Text {
-                text: "Add this line to the game's Launch Options in Steam first:";
-                font-size: 11px;
-                wrap: word-wrap;
+            spacing: 8px;
+
+            HorizontalBox {
+                spacing: 8px;
+                alignment: start;
+                CheckBox {
+                    text: "Auto-configure launch options";
+                    checked <=> root.auto_configure;
+                    toggled => {
+                        root.auto_configure_toggled(root.auto_configure);
+                    }
+                }
             }
-            LineEdit {
-                text: "protonhax init %COMMAND%";
-                read-only: true;
+
+            // Show manual instruction to the user only if auto-configure is off
+            if !root.auto_configure : VerticalBox {
+                padding: 0;
+                spacing: 5px;
+                Text {
+                    text: "Add this line to the game's Launch Options in Steam:";
+                    font-size: 11px;
+                    wrap: word-wrap;
+                }
+                LineEdit {
+                    text: "protonhax init %COMMAND%";
+                    read-only: true;
+                }
+            }
+
+            // Show status when auto-config is on
+            if root.auto_configure && root.launch_options_status != "" : Text {
+                text: root.launch_options_status;
+                font-size: 11px;
+                color: #888888;
+                wrap: word-wrap;
             }
         }
 
