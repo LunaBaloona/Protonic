@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="0.2.1"
+VERSION="0.2.2"
 RELEASE_NAME="protonic-${VERSION}-x86_64-linux"
 RELEASE_DIR="$(pwd)/release-build/${RELEASE_NAME}"
 

@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="0.2.1"
+VERSION="0.2.2"
 PKG_NAME="protonic_${VERSION}_amd64"
 BUILD_DIR="$(pwd)/deb-build"
 PKG_DIR="${BUILD_DIR}/${PKG_NAME}"

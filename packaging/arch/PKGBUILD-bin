@@ -1,6 +1,6 @@
 # Maintainer: LunaBaloona
 pkgname=protonic-bin
-pkgver=0.2.1
+pkgver=0.2.2
 pkgrel=1
 pkgdesc="GUI application for launching Windows executables inside Steam Proton environments (pre-built binary)"
 arch=('x86_64')

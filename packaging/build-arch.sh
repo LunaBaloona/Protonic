@@ -4,7 +4,7 @@
 
 set -e
 
-VERSION="0.2.1"
+VERSION="0.2.2"
 BUILD_DIR="$(pwd)/arch-build"
 
 echo "=== Building Protonic Arch Package ==="
